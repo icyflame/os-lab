@@ -7,18 +7,18 @@
 #include <unistd.h>
 #include <signal.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 
 int linear_search_in_arr(int * arr, int size, int start, int end, int target) {
 	// search the Integer array arr for the element target
 	// between the indexes start and end, both included.
-	
+
 	if(start > end || end > size-1) {
-	 return -1;
+		return -1;
 	}	 
 	int i;
 	for(i=start; i<=end; ++i){
 		if(arr[i] == target){
-			printf("%d %d %d", arr[i], i, target);
 			return i;
 		}
 	}
@@ -29,9 +29,16 @@ void printPid(char * details) {
 	printf("This is the %s pid %d\n", details, getpid());
 }
 
+int found = 0;
 void found_handler(int sig){
-	printf("The integer was found!");
+	printf("[%d] Entered found handler!\n", getpid());
+	printf("[%d] %d %d %d\n", getpid(), sig == SIGUSR1, sig == SIGCHLD, sig);
+	if(sig == SIGUSR1){
+		printf("The integer was found!\n");
+		found = 1;
+	} 
 }
+
 
 int main(int argc, char ** argv) {
 	if(argc < 3) {
@@ -41,10 +48,13 @@ int main(int argc, char ** argv) {
 
 	FILE * filin;
 	int temp;
-	int index;
+	int index = -1;
 	int numbers[1000];
 	int counter = 0;
 	int search = atoi(argv[2]);
+
+	int pipefd[2];
+	pipe(pipefd);
 
 	filin = fopen(argv[1], "r");
 
@@ -63,7 +73,11 @@ int main(int argc, char ** argv) {
 
 	fclose(filin);
 
-	signal(SIGUSR1, found_handler);
+	if (signal(SIGUSR1, found_handler) == SIG_ERR) {
+		printf("SIGUSR1 install error\n");
+		exit(1);
+	}
+	signal(SIGCHLD, found_handler);
 	pid_t main = getpid();
 
 	int remaining_arr;
@@ -77,7 +91,10 @@ int main(int argc, char ** argv) {
 
 	int t;
 
-	while(t < 7) {
+	pid_t pid;
+	int status;
+
+	while(1) {
 		c1 = fork();
 		if(c1 == 0){
 			// inside child process 1
@@ -87,14 +104,18 @@ int main(int argc, char ** argv) {
 			if(remaining_arr <= 5){
 				// start searching in this part of the array
 				if((index = linear_search_in_arr(numbers, counter, start, end, search)) != -1){
-					printf("Element found at %d\n", index);
+					printf("[FOUND] Element found at %d\n", index);
+					kill(main, SIGUSR1);
+					/*write(pipefd[1], index, sizeof(index));*/
+					/*close(pipefd[1]);*/
+					kill(getpid(), SIGINT);
 				} else {
-					printf("this segment does not have the element\n");
+					printf("This segment does not have the element, killing this process now!\n");
+					kill(getpid(), SIGKILL);
 				}
 				break;
 			}
 		} else {
-			/*printf("Still inside the main parent process %d\n", getpid());*/
 			c2 = fork();
 
 			if(c2 == 0) {
@@ -105,19 +126,36 @@ int main(int argc, char ** argv) {
 				if(remaining_arr <= 5){
 					// start searching in this part of the array
 					if((index = linear_search_in_arr(numbers, counter, start, end, search)) != -1){
-						printf("Element found at %d\n", index);
+						printf("[FOUND] Element found at %d\n", index);
+						kill(main, SIGUSR1);
+						/*write(pipefd[1], index, sizeof(index));*/
+						/*close(pipefd[1]);*/
+						kill(getpid(), SIGINT);
 					} else {
-						printf("this segment does not have the element\n");
+						printf("This segment does not have the element, killing this process now!\n");
+						kill(getpid(), SIGINT);
 					}
 					break;
 				}
 			} else {
-				printf("Main parent process, break now!\n");
+				printf("[%d] Main parent process, wait for children and then break!\n", getpid());
+				int status1, status2;
+				pid_t tpid1, tpid2;
+				tpid1 = wait(&status1);
+				tpid2 = wait(&status2);
+				printf("[%d] Statuses: %d %d", getpid(), status1, status2);
+				printf("[%d] PIDs: %d %d", getpid(), tpid1, tpid2);
 				break;
 			}
 		}
-		t += 1;
 	}
 
+	if(main == getpid() && !found) {
+		printf("[NOT FOUND] Not found!\n");
+	} else {
+		printf("Found at %d\n", index);
+		/*int index;*/
+		/*read(pipefd[0], &index, sizeof(index));*/
+	}
 	return 0;
 }
