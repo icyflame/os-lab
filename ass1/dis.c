@@ -8,10 +8,17 @@
 #include <signal.h>
 #include <sys/types.h>
 
-int linear_search_in_arr(int * arr, int size, int target) {
+int linear_search_in_arr(int * arr, int size, int start, int end, int target) {
+	// search the Integer array arr for the element target
+	// between the indexes start and end, both included.
+	
+	if(start > end || end > size-1) {
+	 return -1;
+	}	 
 	int i;
-	for(i=0; i<size; ++i){
+	for(i=start; i<=end; ++i){
 		if(arr[i] == target){
+			printf("%d %d %d", arr[i], i, target);
 			return i;
 		}
 	}
@@ -34,6 +41,7 @@ int main(int argc, char ** argv) {
 
 	FILE * filin;
 	int temp;
+	int index;
 	int numbers[1000];
 	int counter = 0;
 	int search = atoi(argv[2]);
@@ -67,9 +75,9 @@ int main(int argc, char ** argv) {
 	int start = 0, end = counter - 1;
 	remaining_arr = end - start + 1;
 
-	char in;
+	int t;
 
-	while(1) {
+	while(t < 7) {
 		c1 = fork();
 		if(c1 == 0){
 			// inside child process 1
@@ -78,8 +86,11 @@ int main(int argc, char ** argv) {
 			printf("[%d] %d - %d\n", getpid(), start, end);
 			if(remaining_arr <= 5){
 				// start searching in this part of the array
-				// TODO
-				printf("search whatever part of the array this is\n");
+				if((index = linear_search_in_arr(numbers, counter, start, end, search)) != -1){
+					printf("Element found at %d\n", index);
+				} else {
+					printf("this segment does not have the element\n");
+				}
 				break;
 			}
 		} else {
@@ -93,8 +104,11 @@ int main(int argc, char ** argv) {
 				printf("[%d] %d - %d\n", getpid(), start, end);
 				if(remaining_arr <= 5){
 					// start searching in this part of the array
-					// TODO
-					printf("have to search whatever this part of the array is\n");
+					if((index = linear_search_in_arr(numbers, counter, start, end, search)) != -1){
+						printf("Element found at %d\n", index);
+					} else {
+						printf("this segment does not have the element\n");
+					}
 					break;
 				}
 			} else {
@@ -102,6 +116,7 @@ int main(int argc, char ** argv) {
 				break;
 			}
 		}
+		t += 1;
 	}
 
 	return 0;
