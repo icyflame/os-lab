@@ -3,7 +3,9 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <unistd.h>
+#include <dirent.h>
 
 #define HISTSIZE 2
 #define HISTFILESIZE 10000
@@ -93,6 +95,18 @@ int main(int argc, char ** argv, char ** envp) {
 			print_history();
 		} else if(strcmp(command, "pwd") == 0) {
 			printf("%s\n", cwd);
+		} else if(strcmp(command, "cd") == 0) {
+			chdir(getenv("HOME"));
+		} else if(strcmp(command, "ls") == 0) {
+			DIR * pwd = opendir(".");
+			if(pwd == NULL) {
+				perror("mkdir encountered an error!");
+			} else {
+				struct dirent * dp;
+				while((dp = readdir(pwd)) != NULL) {
+					printf("%s\n", dp->d_name);
+				}
+			}
 		} else {
 			// split the string using the space character
 			char temp_string[256];
@@ -116,6 +130,10 @@ int main(int argc, char ** argv, char ** envp) {
 				} else if(strcmp(tokens[0], "history") == 0) {
 					int num_commands_to_display = atoi(tokens[1]);
 					read_last_few_commands(num_commands_to_display);
+				} else if(strcmp(tokens[0], "mkdir") == 0) {
+					if(mkdir(tokens[1], S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) == -1) {
+						perror("mkdir failed");
+					}
 				}
 			} else {
 				perror("Unrecognized command");
