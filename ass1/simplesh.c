@@ -51,6 +51,34 @@ void read_last_few_commands(int num_commands_to_read) {
 	char ** command_history;
 }
 
+void execute(char ** tokens, int numTokens) {
+	int i;
+	char * argv_val;
+	argv_val = (char *) malloc(256 * sizeof(char));
+	for(i=1; i<numTokens; ++i){
+		strcat(argv_val, tokens[i]);
+		strcat(argv_val, " ");
+	}
+	pid_t pid = getpid(), pidc;
+	pidc = fork();
+	if(pidc == -1) {
+		perror("fork error");
+	} else if(pidc == 0) {
+		printf("Inside child!");
+		if(execvp(tokens[0], tokens) == -1) {
+			perror("Error with exec function!");
+		}
+	} else {
+		int status;
+		printf("Inside parent, waiting");
+		if(waitpid(pidc, &status, 0) == pidc){
+			if (WIFEXITED(status)) {
+				printf("exited, status=%d\n", WEXITSTATUS(status));
+			}
+		}
+	}
+}
+
 int main(int argc, char ** argv, char ** envp) {
 
 	strcat(HISTFILENAME, getenv("HOME"));
@@ -81,23 +109,36 @@ int main(int argc, char ** argv, char ** envp) {
 		write_cmd_to_file(command);
 
 		printf("You entered %s %d\n", command, n);
+		// split the string using the space character
+		char temp_string[256];
+		strcpy(temp_string, command);
+		tokens[0] = (char *) malloc(TOKEN_SIZE * sizeof(char));
+		strcpy(tokens[0], strtok(temp_string, " "));
+		printf("Token 0: %s\n", tokens[0]);
+		int num_tokens;
+		for(num_tokens=1; ; ++num_tokens) {
+			tokens[num_tokens] = (char *) malloc(TOKEN_SIZE * sizeof(char));
+			tokens[num_tokens] = strtok(NULL, " ");
+			if(tokens[num_tokens] == NULL)
+				break;
+		}
 
-		if(strcmp(command, "exit") == 0) {
+		if(strcmp(tokens[0], "exit") == 0) {
 			return 0;
-		} else if(strcmp(command, "clear") == 0) {
+		} else if(strcmp(tokens[0], "clear") == 0) {
 			printf("\033[2J\033[1;1H");
-		} else if(strcmp(command, "env") == 0) {
+		} else if(strcmp(tokens[0], "env") == 0) {
 			int i;
 			for(i=0; envp[i]!=0;++i){
 				printf("%s\n", envp[i]);
 			}
-		} else if(strcmp(command, "history") == 0) {
+		} else if(strcmp(tokens[0], "history") == 0) {
 			print_history();
-		} else if(strcmp(command, "pwd") == 0) {
+		} else if(strcmp(tokens[0], "pwd") == 0) {
 			printf("%s\n", cwd);
-		} else if(strcmp(command, "cd") == 0) {
+		} else if(strcmp(tokens[0], "cd") == 0) {
 			chdir(getenv("HOME"));
-		} else if(strcmp(command, "ls") == 0) {
+		} else if(strcmp(tokens[0], "ls") == 0) {
 			DIR * pwd = opendir(".");
 			if(pwd == NULL) {
 				perror("mkdir encountered an error!");
@@ -107,39 +148,22 @@ int main(int argc, char ** argv, char ** envp) {
 					printf("%s\n", dp->d_name);
 				}
 			}
+		}	else if(strcmp(tokens[0], "cd") == 0 && num_tokens >= 2) {
+			chdir(tokens[1]);
+		} else if(strcmp(tokens[0], "history") == 0) {
+			int num_commands_to_display = atoi(tokens[1]);
+			read_last_few_commands(num_commands_to_display);
+		} else if(strcmp(tokens[0], "mkdir") == 0 && num_tokens >= 2) {
+			if(mkdir(tokens[1], S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) == -1) {
+				perror("mkdir failed");
+			}
+		} else if(strcmp(tokens[0], "rmdir") == 0 && num_tokens >= 2) {
+			if(rmdir(tokens[1]) == -1) {
+				perror("rmdir failed");
+			}
 		} else {
-			// split the string using the space character
-			char temp_string[256];
-			strcpy(temp_string, command);
-			tokens[0] = (char *) malloc(TOKEN_SIZE * sizeof(char));
-			strcpy(tokens[0], strtok(temp_string, " "));
-			printf("Token 0: %s\n", tokens[0]);
-			int num_tokens;
-			for(num_tokens=1; ; ++num_tokens) {
-				tokens[num_tokens] = (char *) malloc(TOKEN_SIZE * sizeof(char));
-				tokens[num_tokens] = strtok(NULL, " ");
-				if(tokens[num_tokens] == NULL)
-					break;
-			}
-
-			printf("Num tokens: %d\n", num_tokens);
-
-			if(num_tokens >= 2) {
-				if(strcmp(tokens[0], "cd") == 0) {
-					chdir(tokens[1]);
-				} else if(strcmp(tokens[0], "history") == 0) {
-					int num_commands_to_display = atoi(tokens[1]);
-					read_last_few_commands(num_commands_to_display);
-				} else if(strcmp(tokens[0], "mkdir") == 0) {
-					if(mkdir(tokens[1], S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) == -1) {
-						perror("mkdir failed");
-					}
-				}
-			} else {
-				perror("Unrecognized command");
-			}
+			execute(tokens, num_tokens);
 		}
 	}
-
 	return 0;
 }
