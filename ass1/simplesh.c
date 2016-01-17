@@ -7,7 +7,9 @@
 
 #define HISTSIZE 2
 #define HISTFILESIZE 10000
-const char * HISTFILENAME = "histfile";
+
+extern char ** environ;
+char HISTFILENAME[256];
 
 #define TOKEN_SIZE 100
 #define COMMAND_SIZE 512
@@ -20,7 +22,7 @@ void getcw() {
 	getcwd(cwd, sizeof(cwd));
 }
 
-void write_cmd_to_file(char * command) {
+void write_cmd_to_file(char command[]) {
 	FILE * filout;
 	filout = fopen(HISTFILENAME, "a+");
 	fputs(command, filout);
@@ -28,7 +30,7 @@ void write_cmd_to_file(char * command) {
 	fclose(filout);
 }
 
-void read_from_histfile() {
+void print_history() {
 	FILE * filin;
 	filin = fopen(HISTFILENAME, "r");
 	int i;
@@ -48,6 +50,11 @@ void read_last_few_commands(int num_commands_to_read) {
 }
 
 int main(int argc, char ** argv, char ** envp) {
+
+	strcat(HISTFILENAME, getenv("HOME"));
+	strcat(HISTFILENAME, "/histfile");
+
+	printf("History file: %s\n", HISTFILENAME);
 
 	char * tokens[100];
 	int offset = 0;
@@ -83,7 +90,9 @@ int main(int argc, char ** argv, char ** envp) {
 				printf("%s\n", envp[i]);
 			}
 		} else if(strcmp(command, "history") == 0) {
-			read_from_histfile();
+			print_history();
+		} else if(strcmp(command, "pwd") == 0) {
+			printf("%s\n", cwd);
 		} else {
 			// split the string using the space character
 			char temp_string[256];
@@ -103,7 +112,7 @@ int main(int argc, char ** argv, char ** envp) {
 
 			if(num_tokens >= 2) {
 				if(strcmp(tokens[0], "cd") == 0) {
-					printf("You have entered the cd command\n");
+					chdir(tokens[1]);
 				} else if(strcmp(tokens[0], "history") == 0) {
 					int num_commands_to_display = atoi(tokens[1]);
 					read_last_few_commands(num_commands_to_display);
