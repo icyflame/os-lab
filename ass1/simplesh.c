@@ -52,12 +52,12 @@ void read_last_few_commands(int num_commands_to_read) {
 }
 
 void execute(char ** tokens, int numTokens) {
-	int i;
+	int i, run_bg = 0;
 	char * argv_val;
-	argv_val = (char *) malloc(256 * sizeof(char));
-	for(i=1; i<numTokens; ++i){
-		strcat(argv_val, tokens[i]);
-		strcat(argv_val, " ");
+	if(tokens[numTokens-1][strlen(tokens[numTokens-1])-1] == '&') {
+		printf("Running this command in the background.");
+		run_bg = 1;
+		tokens[numTokens-1][strlen(tokens[numTokens-1])-1] = '\0';
 	}
 	pid_t pid = getpid(), pidc;
 	pidc = fork();
@@ -70,10 +70,12 @@ void execute(char ** tokens, int numTokens) {
 		}
 	} else {
 		int status;
-		printf("Inside parent, waiting");
-		if(waitpid(pidc, &status, 0) == pidc){
-			if (WIFEXITED(status)) {
-				printf("exited, status=%d\n", WEXITSTATUS(status));
+		if(!run_bg) {
+			printf("Inside parent, waiting");
+			if(waitpid(pidc, &status, 0) == pidc){
+				if (WIFEXITED(status)) {
+					printf("exited, status=%d\n", WEXITSTATUS(status));
+				}
 			}
 		}
 	}
