@@ -13,7 +13,7 @@
 #define BUFSIZE 100
 
 int n, k, prime_counter, self_process_counter, *first_time_avail, *primearr, **pipes;
-pid_t *process_id_arr;
+pid_t parent_pid, *process_id_arr;
 
 int is_prime(int number) {
 	int i;
@@ -32,6 +32,11 @@ void print(char * str) {
 }
 
 static void handle_available(int sig, siginfo_t *siginfo, void *context) {
+	// this function can run only in the main parent process
+	if(getpid() != parent_pid) {
+		return;
+	}
+
 	printf("[%d] Child %d sent available\n", getpid(), siginfo->si_pid);
 
 	// find the process number that sent this signal
@@ -44,19 +49,51 @@ static void handle_available(int sig, siginfo_t *siginfo, void *context) {
 	}
 
 	if(pcounter == -1) {
+		printf("[%d] This process is not a part of our program: %d", getpid(), siginfo->si_pid);
 		perror("this process is not a part of our program.");
 	}
 
 	// if not the first time, read this process's pipe
 	// and see if any primes were generated
-	
+
 	if(!first_time_avail[pcounter]) {
 		char buf[BUFSIZE];
 		int numread = read(pipes[pcounter+k][0], buf, BUFSIZE);
 		printf("[%d] Process pid %d sent this: %s\n", getpid(), siginfo->si_pid, buf);
-		print("Enter an integer to coninute");
-		int temp;
-		scanf("%d", &temp);
+		char tokens[BUFSIZE][20];
+		int numbers[BUFSIZE];
+		strcpy(tokens[0], strtok(buf, " "));
+		int counter = 0, j;
+		while(counter < atoi(tokens[0])) {
+			strcpy(tokens[counter+1], strtok(NULL, " "));
+			numbers[counter] = atoi(tokens[counter+1]);
+
+			// check if this number is there in primearr
+
+			for(j=0; j<prime_counter;j++) {
+				if(numbers[counter] == primearr[j]) {
+					continue;
+				}
+			}
+			primearr[prime_counter++] = numbers[counter];
+
+			if(prime_counter >= n) {
+				print("Done with finding all the prime numbers!");
+				
+				print("Printing all the found primes now:");
+				print("------------------------------------");
+
+				for(counter=0; counter<prime_counter; ++counter) {
+					printf("[%d] Prime: %5d\n", getpid(), primearr[counter]);
+				}
+				exit(0);
+			}
+			counter++;
+		}
+		printf("[%d] %d primes found till now\n", getpid(), prime_counter);
+		/*print("Enter an integer to coninute");*/
+		/*int temp;*/
+		/*scanf("%d", &temp);*/
 	} else {
 		first_time_avail[pcounter] = 0;
 	}
@@ -96,6 +133,9 @@ static void handle_available(int sig, siginfo_t *siginfo, void *context) {
 }
 
 static void handle_busy(int sig, siginfo_t *siginfo, void *context) {
+	if(getpid() != parent_pid) {
+		return;
+	}
 	printf("[%d] Child %d sent busy\n", getpid(), siginfo->si_pid);
 }
 
@@ -107,7 +147,8 @@ int main(int argc, char ** argv) {
 	}
 
 	int i, j;
-	pid_t parent_pid = getpid(), pidc;
+	parent_pid = getpid();
+	pid_t	pidc;
 	prime_counter = 0;
 	self_process_counter = -1; // parent is -1, children start indexing from 0
 	const char * hello_world = "Hello, world";
@@ -165,19 +206,19 @@ int main(int argc, char ** argv) {
 			// inside child process
 
 			// setup and test the pipes here
-	/*		
-				 size_t nbyte;
-				 if((nbyte = write(pipes[i][1], hello_world, strlen(hello_world))) == -1) {
-				 perror("write function didn't work");
-				 }
+			/*		
+						size_t nbyte;
+						if((nbyte = write(pipes[i][1], hello_world, strlen(hello_world))) == -1) {
+						perror("write function didn't work");
+						}
 
-				 if(nbyte != sizeof(hello_world)) {
-				 printf("[%d] Wrote %d chars\n", getpid(), (int)nbyte);
-				 perror("write function only succeeded partially");
-				 } else {
-				 printf("[%d] wrote %d bytes\n\n", getpid(), (int)nbyte);
-				 }
-		*/		 
+						if(nbyte != sizeof(hello_world)) {
+						printf("[%d] Wrote %d chars\n", getpid(), (int)nbyte);
+						perror("write function only succeeded partially");
+						} else {
+						printf("[%d] wrote %d bytes\n\n", getpid(), (int)nbyte);
+						}
+						*/		 
 
 			self_process_counter = i;
 
@@ -241,7 +282,7 @@ int main(int argc, char ** argv) {
 			// and the primes themselves: 2 59 61
 			int temp_prime_count = 0;
 			char tfinal[BUFSIZE], final_string[BUFSIZE], temp[10]; // TODO - dynamic final_string
-			
+
 			for(i=0; i<k; ++i) {
 				if(is_prime(numbers[i]) == 1) {
 					printf("[%d] Determind %d to be a prime\n", getpid(), numbers[i]);
