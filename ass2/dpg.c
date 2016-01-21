@@ -12,7 +12,7 @@
 
 #define BUFSIZE 100
 
-int n, k, prime_counter, self_process_counter, *primearr, **pipes;
+int n, k, prime_counter, self_process_counter, *first_time_avail, *primearr, **pipes;
 pid_t *process_id_arr;
 
 int is_prime(int number) {
@@ -21,10 +21,10 @@ int is_prime(int number) {
 	{
 		if(number % i == 0)
 		{
-			return 1;
+			return 0;
 		}
 	}
-	return 0;
+	return 1;
 }
 
 void print(char * str) {
@@ -45,6 +45,20 @@ static void handle_available(int sig, siginfo_t *siginfo, void *context) {
 
 	if(pcounter == -1) {
 		perror("this process is not a part of our program.");
+	}
+
+	// if not the first time, read this process's pipe
+	// and see if any primes were generated
+	
+	if(!first_time_avail[pcounter]) {
+		char buf[BUFSIZE];
+		int numread = read(pipes[pcounter+k][0], buf, BUFSIZE);
+		printf("[%d] Process pid %d sent this: %s\n", getpid(), siginfo->si_pid, buf);
+		print("Enter an integer to coninute");
+		int temp;
+		scanf("%d", &temp);
+	} else {
+		first_time_avail[pcounter] = 0;
 	}
 
 	// generate k numbers and
@@ -127,17 +141,21 @@ int main(int argc, char ** argv) {
 	k              = atoi(argv[2]);
 	primearr       = (int *) malloc(sizeof(int) * n);
 
-	pipes          = (int **) malloc(sizeof(int *) * k);
-	for(i = 0; i < k; ++i) {
+	pipes          = (int **) malloc(sizeof(int *) * 2 * k);
+	for(i = 0; i < 2 * k; ++i) {
 		pipes[i] = (int *) malloc(sizeof(int) * 2);
 	}
 
 	process_id_arr = (pid_t *) malloc(sizeof(pid_t) * k);
 
+	first_time_avail = (int *) malloc(sizeof(int) * k);
+
 	for(i = 0; i < k; ++i) {
 
+		first_time_avail[i] = 1;
+
 		// call pipe function here
-		if(pipe(pipes[i]) == -1) {
+		if(pipe(pipes[i]) == -1 || pipe(pipes[i+k]) == -1) {
 			perror("pipe function did not work!");
 		}
 
@@ -189,8 +207,8 @@ int main(int argc, char ** argv) {
 			printf("[%d] Listening on the pipe number %d for this PID\n", getpid(), self_process_counter);
 			char pipe_numbers[BUFSIZE];
 			int numread =  read(pipes[self_process_counter][0], pipe_numbers, BUFSIZE);
-			print("read the chars");
-			pipe_numbers[numread] = '\0';
+			/*pipe_numbers[numread] = '\0';*/
+			kill(parent_pid, SIGUSR2);
 			printf("[%d] Recieved (%d chars) from the pipe: %s\n", getpid(), (int)strlen(pipe_numbers), pipe_numbers);
 
 			// use strtok to get all the numbers read from the pipe
@@ -207,7 +225,7 @@ int main(int argc, char ** argv) {
 				numbers[counter++] = atoi(strtok(NULL, " "));
 			}
 
-			if(counter != k) {
+			if(counter != k+1) {
 				printf("[%d] Read %d integers instead of expected %d\n", getpid(), counter, k);
 				perror("Numbers read didn't match number of expected integers");
 			} else {
@@ -216,8 +234,32 @@ int main(int argc, char ** argv) {
 			for(i=0; i<counter; ++i) {
 				printf("[%d] Number: %d\n", getpid(), numbers[i]);
 			}
+
+			// only take the first k integers
+			//
+			// send back the number of primes
+			// and the primes themselves: 2 59 61
+			int temp_prime_count = 0;
+			char tfinal[BUFSIZE], final_string[BUFSIZE], temp[10]; // TODO - dynamic final_string
+			
+			for(i=0; i<k; ++i) {
+				if(is_prime(numbers[i]) == 1) {
+					printf("[%d] Determind %d to be a prime\n", getpid(), numbers[i]);
+					sprintf(temp, "%d ", numbers[i]);
+					strcat(tfinal, temp);
+					temp_prime_count++;
+				}
+			}
+			printf("[%d] Found a total of %d prime numbers\n", getpid(), temp_prime_count);
+			sprintf(final_string, "%d", temp_prime_count);
+			if(temp_prime_count > 0) {
+				strcat(final_string, " ");
+				strcat(final_string, tfinal);
+			}
+
+			write(pipes[self_process_counter+k][1], final_string, strlen(final_string));
+
 			kill(parent_pid, SIGUSR1);
-			kill(getpid(), SIGKILL);
 		}
 	}
 
