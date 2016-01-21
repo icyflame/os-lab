@@ -6,7 +6,7 @@
 #include <signal.h>
 #include <unistd.h>
 
-int n, k, *primearr, **pipes;
+int n, k, prime_counter, *primearr, **pipes;
 pid_t *process_id_arr;
 
 void print(char * str) {
@@ -14,11 +14,11 @@ void print(char * str) {
 }
 
 static void handle_available(int sig, siginfo_t *siginfo, void *context) {
-	print("Some child sent available!");
+	printf("[%d] Child %d sent available\n", getpid(), siginfo->si_pid);
 }
 
 static void handle_busy(int sig, siginfo_t *siginfo, void *context) {
-	printf("Another child sent busy!");
+	printf("[%d] Child %d sent busy\n", getpid(), siginfo->si_pid);
 }
 
 int main(int argc, char ** argv) {
@@ -30,6 +30,7 @@ int main(int argc, char ** argv) {
 
 	int i;
 	pid_t parent_pid = getpid(), pidc;
+	prime_counter = 0;
 
 	// treat SIGUSR1 as available
 	// and SIGUSR2 as busy
@@ -97,8 +98,14 @@ int main(int argc, char ** argv) {
 
 	if(getpid() == parent_pid) {
 		for(i=0; i<k; ++i) {
-			printf("[%d] %d\n", getpid(), process_id_arr[i]);
+			printf("[%d] Child %d : %d\n", getpid(), i+1, process_id_arr[i]);
 		}
+
+		// send k random numbers to each child - TODO
+	}
+
+	if(getpid() != parent_pid) {
+		// inside the child processes
 	}
 
 	return 0;
